@@ -38,6 +38,9 @@ export const getPackage: RequestHandler = async function (req, res, next) {
 };
 
 async function getDependencies(name: string, range: string): Promise<Package> {
+  // review: this could be refactored into a "registry service" to avoid code duplication
+  // and improve extensibility. e.g. if this tool needs to support private registries in 
+  // the future.
   const npmPackage: NPMPackage = await got(
     `https://registry.npmjs.org/${name}`,
   ).json();
