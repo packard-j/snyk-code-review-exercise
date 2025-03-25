@@ -18,8 +18,9 @@ export const getPackage: RequestHandler = async function (req, res, next) {
 
     const dependencies: Record<string, string> =
       npmPackage.versions[version].dependencies ?? {};
+    const v = maxSatisfying(Object.keys(npmPackage.versions), '*');
     for (const [name, range] of Object.entries(dependencies)) {
-      const subDep = await getDependencies(name, range);
+      const subDep = await getDependencies(name, range, new Set([`${name}@${v}`]));
       dependencyTree[name] = subDep;
     }
 
@@ -37,7 +38,40 @@ export const getPackage: RequestHandler = async function (req, res, next) {
   }
 };
 
-async function getDependencies(name: string, range: string): Promise<Package> {
+/**
+ * Expected response for a cyclic dependency contained in 'trucolor'.
+ * {
+ *   'name': 'trucolor',
+ *   'version': '4.0.4',
+ *   'dependencies': {
+ *     'else': {
+ *       'version': '0.0.1',
+ *       'depedencies': {
+ *         'trucolor': {
+ *           'version': '4.0.4',
+ *           'dependencies: {}
+ *         }
+ *       }
+ *     }
+ *   }
+ * }
+ * --------------
+ * trucolor
+ *   a 1
+ *     b 1
+ *   b
+ */
+
+type NameAndVersion = string; // '<name>@<version>'
+type Accumulator = Set<NameAndVersion>; 
+
+/**
+ * 
+ * @param name 
+ * @param range 
+ * @returns 
+ */
+async function getDependencies(name: string, range: string, accumulator: Accumulator): Promise<Package> {
   // review: this could be refactored into a "registry service" to avoid code duplication
   // and improve extensibility. e.g. if this tool needs to support private registries in 
   // the future.
@@ -54,6 +88,13 @@ async function getDependencies(name: string, range: string): Promise<Package> {
   const dependencies: Record<string, Package> = {};
 
   if (v) {
+    const nameAndVersion = `${name}@${v}`;
+    if (accumulator.has(nameAndVersion)) {
+      return {
+        version: v,
+        dependencies: {}
+      };
+    }
     const newDeps = npmPackage.versions[v].dependencies;
     // review: Sequentially fetching dependencies will cause a
     // networking bottleneck. It may be better to fetch dependencies
@@ -71,8 +112,8 @@ async function getDependencies(name: string, range: string): Promise<Package> {
       // review: recusively traversing dependencies without maintaining
       // an accumulator for the already-fetched dependencies will result
       // in duplicated requests to NPM's APIs.
-      // A dependency cycle could also be resolved using an accumulator. 
-      dependencies[name] = await getDependencies(name, range);
+      // A dependency cycle could also be resolved using an accumulator.
+      dependencies[name] = await getDependencies(name, range, new Set(accumulator).add(nameAndVersion));
     }
   }
 
