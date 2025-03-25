@@ -48,6 +48,8 @@ async function getDependencies(name: string, range: string): Promise<Package> {
   // review: this can result in cyclic depndency resolution when encountering
   // packages containing a dependency with '*' as the specified version.
   // The "everything" package is again a good example.
+  // 'everything': { 'some-other-dependency': '*' }
+  // 'some-other-dependency': { 'everything': '*' }
   const v = maxSatisfying(Object.keys(npmPackage.versions), range);
   const dependencies: Record<string, Package> = {};
 
