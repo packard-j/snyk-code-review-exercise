@@ -24,6 +24,10 @@ describe('/package/:name/:version endpoint', () => {
     await new Promise((resolve) => server.close(resolve));
   });
 
+  // review: This test depends on a network connection to registry.npmjs.org.
+  // to make this test deterministic, consider mocking network calls to external
+  // services. It would also make it more clear how the expected output is derived
+  // from the input.
   it('responds', async () => {
     const packageName = 'react';
     const packageVersion = '16.13.0';

@@ -25,6 +25,12 @@ export const getPackage: RequestHandler = async function (req, res, next) {
 
     return res
       .status(200)
+      // review: A deep tree of JSON objects might not be the
+      // easiest structure to work with as an HTTP API consumer. The body of
+      // the response could become quite large, containing many duplicate packages;
+      // an extreme example would be querying for the "everything" package.
+      // A flatter response structure might be preferrable, e.g. with each package
+      // referring to another top-level object by name & version.
       .json({ name, version, dependencies: dependencyTree });
   } catch (error) {
     return next(error);
@@ -36,15 +42,29 @@ async function getDependencies(name: string, range: string): Promise<Package> {
     `https://registry.npmjs.org/${name}`,
   ).json();
 
+  // review: this might result in cyclic depndency resolution when encountering
+  // packages containing a dependency with '*' as the specified version.
+  // The "everything" package is again a good example.
   const v = maxSatisfying(Object.keys(npmPackage.versions), range);
   const dependencies: Record<string, Package> = {};
 
   if (v) {
     const newDeps = npmPackage.versions[v].dependencies;
+    // review: Sequentially fetching dependencies will cause a
+    // networking bottleneck. It may be better to fetch dependencies
+    // concurrently (up to a max amount depending on NPM's rate limits).
     for (const [name, range] of Object.entries(newDeps ?? {})) {
+      // review: recusively traversing dependencies without maintaining
+      // an accumulator for the already-fetched dependencies will result
+      // in duplicated requests to NPM's APIs.
+      // A dependency cycle could also be resolved using an accumulator. 
       dependencies[name] = await getDependencies(name, range);
     }
   }
 
+  // review: If a version satisfying the range is not found, dependencies
+  // will be an empty object. This behavior might be confusing for callers of
+  // this funciton. Rejecting the promise or another, distinct result type is
+  // probably more appropriate.
   return { version: v ?? range, dependencies };
 }
