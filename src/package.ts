@@ -18,9 +18,8 @@ export const getPackage: RequestHandler = async function (req, res, next) {
 
     const dependencies: Record<string, string> =
       npmPackage.versions[version].dependencies ?? {};
-    const v = maxSatisfying(Object.keys(npmPackage.versions), '*');
     for (const [name, range] of Object.entries(dependencies)) {
-      const subDep = await getDependencies(name, range, new Set([`${name}@${v}`]));
+      const subDep = await getDependencies(name, range, new Set([`${name}@${version}`]));
       dependencyTree[name] = subDep;
     }
 
